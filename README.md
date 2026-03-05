@@ -18,6 +18,20 @@ This bot consumes real-time trading signals from the Polystrike API and executes
 2. **Polymarket Wallet** with USDC balance
 3. **Telegram Bot** (optional, for alerts)
 
+## Quick Demo
+
+Want to see it in action first? Run the demo:
+
+```bash
+git clone https://github.com/polystrike/polystrike-bot.git
+cd polystrike-bot
+cp .env.example .env
+# Add your POLYSTRIKE_API_KEY to .env
+uv run demo.py
+```
+
+This shows you what signals the bot would trade without executing anything.
+
 ## Quick Start
 
 ### 1. Installation

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        uv venv
+        uv pip install -e .
+
+    - name: Lint with ruff (if available)
+      run: |
+        uv pip install ruff || true
+        ruff check . || true
+      continue-on-error: true
+
+    - name: Check code formatting
+      run: |
+        uv pip install black || true
+        black --check . || true
+      continue-on-error: true
+
+    - name: Type check with mypy (if available)
+      run: |
+        uv pip install mypy || true
+        mypy . || true
+      continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Bandit security scan
+      run: |
+        pip install bandit
+        bandit -r . -f json -o bandit-report.json || true
+      continue-on-error: true
