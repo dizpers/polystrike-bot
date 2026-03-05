@@ -1,0 +1,19 @@
+[project]
+name = "polystrike-bot"
+version = "0.1.0"
+description = "Automated Polymarket trading bot powered by Polystrike prediction signals"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "py-clob-client>=0.25.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "web3>=6.0.0",
+    "python-telegram-bot>=20.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
