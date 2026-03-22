@@ -1,0 +1,40 @@
+- name: Check Bot Status
+  hosts: bot
+  become: false
+  tasks:
+    - name: Check systemd service status
+      command: systemctl status polystrike-bot --no-pager
+      register: service_status
+      become: true
+      ignore_errors: yes
+
+    - name: Display service status
+      debug:
+        var: service_status.stdout_lines
+
+    - name: Check if bot is running
+      shell: ps aux | grep "[b]ot.py"
+      register: bot_process
+      ignore_errors: yes
+
+    - name: Display bot process
+      debug:
+        var: bot_process.stdout_lines
+
+    - name: Get last 20 lines of bot log
+      shell: tail -n 20 /opt/polystrike-bot/current/bot.log
+      register: bot_log
+      ignore_errors: yes
+
+    - name: Display bot log
+      debug:
+        var: bot_log.stdout_lines
+
+    - name: Get last 10 lines of trades log
+      shell: tail -n 10 /opt/polystrike-bot/current/trades.log
+      register: trades_log
+      ignore_errors: yes
+
+    - name: Display trades log
+      debug:
+        var: trades_log.stdout_lines

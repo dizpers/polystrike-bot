@@ -86,7 +86,7 @@ class RiskManager:
         Returns:
             (should_sell, reason)
         """
-        pnl_pct = position.get("pnl_percent", 0) / 100.0
+        pnl_pct = position.get("pnl_percent", 0)
         model_prob = position.get("analysis", {}).get("win_probability", 0)
 
         # Smart stop-loss (memory.md §72)
@@ -110,7 +110,7 @@ class RiskManager:
             Exposure fraction (0.0 to 1.0)
         """
         total_deployed = sum(
-            float(p.get("current_value", 0))
+            float(p.get("cost_basis", 0))
             for p in positions
         )
         return total_deployed / self.bankroll if self.bankroll > 0 else 0.0

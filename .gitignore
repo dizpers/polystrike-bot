@@ -7,3 +7,9 @@ venv/
 .DS_Store
 trades.db
 *.db
+
+# Deployment secrets
+deploy/keys/
+deploy/ansible/inventory.ini
+.env.production
+.env.staging

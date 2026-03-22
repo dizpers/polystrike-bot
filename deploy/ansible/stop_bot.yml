@@ -1,0 +1,12 @@
+- name: Stop Polystrike Bot
+  hosts: bot
+  become: true
+  tasks:
+    - name: Stop bot service
+      service:
+        name: polystrike-bot
+        state: stopped
+
+    - name: Display status
+      debug:
+        msg: "Bot stopped. Use 'ansible-playbook playbook.yml' to restart."

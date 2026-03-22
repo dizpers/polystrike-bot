@@ -1,5 +1,6 @@
 """Wrapper for Polymarket py-clob-client."""
 import logging
+from typing import Dict
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, MarketOrderArgs, OrderType
 from py_clob_client.order_builder.constants import BUY, SELL
@@ -86,11 +87,17 @@ class PolymarketClient:
             raise
 
     def get_balance(self) -> float:
-        """Get USDC balance."""
+        """
+        Get USDC balance for the wallet.
+
+        Returns:
+            USDC balance as float
+        """
         try:
-            # This would need to be implemented based on py-clob-client API
-            # For now, return 0 as placeholder
-            return 0.0
+            # py-clob-client provides get_balance() method
+            balance = self.client.get_balance()
+            logger.info(f"USDC Balance: ${balance:.2f}")
+            return float(balance)
         except Exception as e:
             logger.error(f"Failed to get balance: {e}")
             return 0.0

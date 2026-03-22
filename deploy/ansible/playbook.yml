@@ -1,0 +1,148 @@
+- name: Deploy Polystrike Trading Bot
+  hosts: bot
+  become: false
+  vars:
+    app_root: /opt/polystrike-bot
+    repo_url: "git@github.com:dizpers/polystrike-bot.git"
+    # Path to local .env file with secrets (not committed to git)
+    local_env_path: "../../.env.production"
+    python_version: "3.12"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      become: true
+
+    - name: Install System Dependencies
+      apt:
+        name:
+          - git
+          - python3-venv
+          - python3-pip
+          - curl
+        state: present
+      become: true
+
+    - name: Ensure .ssh directory exists
+      file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      become: true
+
+    - name: Upload GitHub Deploy Key (if exists)
+      copy:
+        src: "../keys/github_deploy_key"
+        dest: "/home/{{ ansible_user }}/.ssh/id_github_deploy"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      become: true
+      when: lookup('fileglob', '../keys/github_deploy_key') | length > 0
+
+    - name: Configure SSH to use Deploy Key for GitHub
+      copy:
+        content: |
+          Host github.com
+            IdentityFile ~/.ssh/id_github_deploy
+            StrictHostKeyChecking no
+        dest: "/home/{{ ansible_user }}/.ssh/config"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      become: true
+
+    - name: Install uv (Python Package Manager)
+      shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+      args:
+        creates: "/home/{{ ansible_user }}/.local/bin/uv"
+
+    - name: Create App Directory
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      become: true
+
+    - name: Checkout Code
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_root }}/repo"
+        version: main
+        force: yes
+        depth: 1
+        accept_hostkey: yes
+      become: false
+      register: git_checkout
+
+    - name: Sync Project to Runtime Dir
+      synchronize:
+        src: "{{ app_root }}/repo/"
+        dest: "{{ app_root }}/current/"
+        delete: yes
+        recursive: yes
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: Check if local .env file exists
+      stat:
+        path: "{{ local_env_path }}"
+      delegate_to: localhost
+      register: local_env_file
+      become: false
+
+    - name: Copy .env file from local machine
+      copy:
+        src: "{{ local_env_path }}"
+        dest: "{{ app_root }}/current/.env"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      become: true
+      when: local_env_file.stat.exists
+
+    - name: Create .env from example if no production env provided
+      copy:
+        src: "{{ app_root }}/current/.env.example"
+        dest: "{{ app_root }}/current/.env"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        remote_src: yes
+      become: true
+      when: not local_env_file.stat.exists
+
+    - name: Remove .venv to ensure clean install
+      file:
+        path: "{{ app_root }}/current/.venv"
+        state: absent
+
+    - name: Install Python Dependencies via uv
+      shell: "/home/{{ ansible_user }}/.local/bin/uv sync"
+      args:
+        chdir: "{{ app_root }}/current"
+
+    - name: Install Systemd Service
+      template:
+        src: templates/polystrike-bot.service.j2
+        dest: /etc/systemd/system/polystrike-bot.service
+      become: true
+      notify: Reload Systemd
+
+    - name: Enable and Start Bot Service
+      service:
+        name: polystrike-bot.service
+        state: restarted
+        enabled: yes
+      become: true
+
+  handlers:
+    - name: Reload Systemd
+      systemd:
+        daemon_reload: yes
+      become: true

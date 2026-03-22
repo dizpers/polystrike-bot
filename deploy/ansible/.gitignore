@@ -1,0 +1,9 @@
+# Exclude real inventory with server IPs and credentials
+inventory.ini
+
+# Exclude any local override files
+*.local.yml
+*.secret.yml
+
+# Exclude logs
+*.log

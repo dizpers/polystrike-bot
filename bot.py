@@ -4,7 +4,7 @@ import time
 import sys
 from datetime import datetime
 
-from config import load_config
+from config import load_config, validate_config
 from polystrike_client import PolystrikeClient
 from polymarket_client import PolymarketClient
 from risk_manager import RiskManager
@@ -26,6 +26,16 @@ class TradingBot:
 
     def __init__(self):
         self.config = load_config()
+
+        # Validate configuration
+        is_valid, errors = validate_config(self.config)
+        if not is_valid:
+            logger.error("❌ Configuration errors:")
+            for error in errors:
+                logger.error(f"   - {error}")
+            sys.exit(1)
+
+        logger.info("✅ Configuration validated")
 
         # Initialize clients
         self.polystrike = PolystrikeClient(
@@ -105,6 +115,7 @@ class TradingBot:
         """Execute a single BUY signal."""
         bucket = signal.get("bucket")
         event_id = signal.get("event_id")
+        token_id = signal.get("token_id")  # Get from signal directly
 
         # Risk check
         should_execute, reason = self.risk_manager.should_execute_buy(signal, current_exposure)
@@ -113,9 +124,15 @@ class TradingBot:
             logger.info(f"⏭️  SKIP {bucket}: {reason}")
             return
 
+        # Validate token_id
+        if not token_id:
+            logger.error(f"❌ No token_id provided for {bucket}")
+            return
+
         # Log signal details
         logger.info(f"\n{'='*60}")
         logger.info(f"💰 BUY Signal: Event {event_id} → {bucket}")
+        logger.info(f"   Token ID: {token_id}")
         logger.info(f"   Model: {signal['model_prob']:.0%} vs Market: {signal['market_price']:.0%}")
         logger.info(f"   Edge: {signal['edge']:+.1%} | EV: ${signal['ev']:+.3f}/$")
         logger.info(f"   Kelly: {signal['kelly_fraction']:.1%} | Bet: ${signal['suggested_bet']:.2f}")
@@ -134,14 +151,6 @@ class TradingBot:
             logger.info(f"🔧 DRY RUN: Would buy ${signal['suggested_bet']:.2f} of {bucket}")
         else:
             try:
-                # TODO: Need to map bucket to token_id
-                # This requires additional API endpoint or market discovery
-                token_id = self.get_token_id_for_bucket(event_id, bucket)
-
-                if not token_id:
-                    logger.error(f"❌ Could not find token_id for {bucket}")
-                    return
-
                 response = self.polymarket.place_market_buy(
                     token_id=token_id,
                     amount_usd=signal['suggested_bet']
@@ -153,35 +162,50 @@ class TradingBot:
                 logger.error(f"❌ Failed to execute trade: {e}")
 
     def check_stop_losses(self, positions: list):
-        """Check all positions for stop-loss triggers."""
         for position in positions:
             should_sell, reason = self.risk_manager.should_stop_loss(position)
 
             if should_sell:
                 bucket = position.get("bucket")
+                event_id = position.get("event_id")
+                shares = position.get("tokens", 0)  # Note: API returns 'tokens' not 'shares'
+
                 logger.warning(f"🚨 STOP-LOSS: {bucket} - {reason}")
 
                 if self.config.dry_run:
-                    logger.info(f"🔧 DRY RUN: Would sell {bucket}")
+                    logger.info(f"🔧 DRY RUN: Would sell {shares} shares of {bucket}")
                 else:
                     try:
-                        # TODO: Execute sell order
-                        logger.info(f"Selling {bucket}...")
+                        # Get current signals to find token_id
+                        # (Portfolio endpoint doesn't include token_ids)
+                        signals = self.polystrike.get_signals(self.config.bankroll)
+
+                        # Find matching signal for this event/bucket
+                        token_id = None
+                        for event_signals in signals:
+                            if event_signals.get("event_id") == event_id:
+                                for sig in event_signals.get("signals", []):
+                                    if sig.get("bucket") == bucket:
+                                        token_id = sig.get("token_id")
+                                        break
+                            if token_id:
+                                break
+
+                        if not token_id:
+                            logger.error(f"❌ Cannot sell {bucket}: token_id not found in current signals")
+                            continue
+
+                        # Execute market sell
+                        response = self.polymarket.place_market_sell(
+                            token_id=token_id,
+                            shares=shares
+                        )
+
+                        logger.info(f"✅ Stop-loss executed: Sold {shares} shares of {bucket}")
+                        logger.info(f"   Response: {response}")
+
                     except Exception as e:
-                        logger.error(f"❌ Failed to execute stop-loss: {e}")
-
-    def get_token_id_for_bucket(self, event_id: int, bucket: str) -> str | None:
-        """
-        Map event_id + bucket to Polymarket token_id.
-
-        TODO: This needs to be implemented by either:
-        1. Adding a /markets endpoint to Polystrike API
-        2. Using Polymarket's market discovery API
-        3. Maintaining a local cache of event_id -> token_id mappings
-        """
-        # Placeholder - needs implementation
-        logger.warning("Token ID mapping not implemented yet")
-        return None
+                        logger.error(f"❌ Failed to execute stop-loss: {e}", exc_info=True)
 
 
 def main():

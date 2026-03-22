@@ -1,0 +1,7 @@
+# Ansible Inventory Template
+# Copy this to inventory.ini and update with your server details
+# inventory.ini is gitignored to keep your server info private
+
+[bot]
+# Example: 192.168.1.100 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/bot_deploy_key
+YOUR_SERVER_IP ansible_user=YOUR_USERNAME ansible_ssh_private_key_file=~/.ssh/YOUR_KEY

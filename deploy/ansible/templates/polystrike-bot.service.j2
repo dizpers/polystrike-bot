@@ -1,0 +1,25 @@
+[Unit]
+Description=Polystrike Trading Bot
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ ansible_user }}
+WorkingDirectory={{ app_root }}/current
+Environment="PATH=/home/{{ ansible_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/{{ ansible_user }}/.local/bin/uv run python bot.py
+Restart=always
+RestartSec=10
+StandardOutput=append:{{ app_root }}/current/bot.log
+StandardError=append:{{ app_root }}/current/bot.log
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ app_root }}/current
+
+[Install]
+WantedBy=multi-user.target

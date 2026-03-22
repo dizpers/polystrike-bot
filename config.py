@@ -1,6 +1,6 @@
 """Configuration management for Polystrike Trading Bot."""
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
@@ -42,11 +42,63 @@ class Config(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="trades.log", alias="LOG_FILE")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        populate_by_name=True
+    )
 
 
 def load_config() -> Config:
     """Load configuration from .env file."""
     return Config()
+
+
+def validate_config(config: Config) -> tuple[bool, list[str]]:
+    """
+    Validate configuration and return (is_valid, errors).
+
+    Returns:
+        Tuple of (is_valid, list of error messages)
+    """
+    errors = []
+
+    # Validate Polystrike API
+    if not config.polystrike_api_key:
+        errors.append("POLYSTRIKE_API_KEY is required")
+    elif not config.polystrike_api_key.startswith("ps_pro_"):
+        errors.append("POLYSTRIKE_API_KEY must start with 'ps_pro_'")
+
+    # Validate wallet (only if not dry-run)
+    if not config.dry_run:
+        if not config.wallet_private_key:
+            errors.append("WALLET_PRIVATE_KEY is required for live trading")
+        elif not config.wallet_private_key.startswith("0x"):
+            errors.append("WALLET_PRIVATE_KEY must start with '0x'")
+        elif len(config.wallet_private_key) != 66:
+            errors.append("WALLET_PRIVATE_KEY must be 66 characters (0x + 64 hex)")
+
+        if not config.wallet_address:
+            errors.append("WALLET_ADDRESS is required for live trading")
+        elif not config.wallet_address.startswith("0x"):
+            errors.append("WALLET_ADDRESS must start with '0x'")
+        elif len(config.wallet_address) != 42:
+            errors.append("WALLET_ADDRESS must be 42 characters (0x + 40 hex)")
+
+    # Validate trading parameters
+    if config.bankroll <= 0:
+        errors.append("BANKROLL must be positive")
+
+    if config.max_position_size > config.bankroll:
+        errors.append("MAX_POSITION_SIZE cannot exceed BANKROLL")
+
+    if not 0 < config.min_edge < 1:
+        errors.append("MIN_EDGE must be between 0 and 1")
+
+    if not -1 < config.stop_loss_pct < 0:
+        errors.append("STOP_LOSS_PCT must be negative (e.g., -0.30)")
+
+    if config.min_confidence not in ["LOW", "MEDIUM", "HIGH"]:
+        errors.append("MIN_CONFIDENCE must be LOW, MEDIUM, or HIGH")
+
+    return len(errors) == 0, errors
